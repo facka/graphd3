@@ -8,6 +8,8 @@ var Graph = function() {
   this.mousedown_link = null;
   this.mousedown_node = null;
   this.mouseup_node = null;
+  this.mouseover_link = null;
+  this.mousedown_node = null;
 
   this.resetMouseVars = function() {
     this.mousedown_node = null;
@@ -15,24 +17,26 @@ var Graph = function() {
     this.mousedown_link = null;
   };
 
+  this.setMouseDownNode = function(node) {
+    this.mousedown_node = node;
+  };
+
   this.selectLink = function (link) {
-    _self.mousedown_link = link;
-    if(_self.mousedown_link === _self.selected_link) {
+    if (_self.selected_link && _self.selected_link.id === link.id ) {
       _self.selected_link = null;
     }
     else {
-      _self.selected_link = _self.mousedown_link;
+      _self.selected_link = link;
     }
     _self.selected_node = null;
   };
 
   this.selectNode = function (node) {
-    _self.mousedown_node = node;
-    if (_self.mousedown_node === _self.selected_node) {
+    if (_self.selected_node && _self.selected_node.id === node.id ) {
       _self.selected_node = null;
     }
     else {
-      _self.selected_node = _self.mousedown_node;
+      _self.selected_node = node;
     }
     _self.selected_link = null;
   };
@@ -74,6 +78,7 @@ var Node = function(id, x, y) {
 };
 
 var Link = function(id, source, target, orientation) {
+  this.id = id;
   this.source = source;
   this.target = target;
   this.right = orientation.right;
@@ -88,11 +93,11 @@ var NodeFactory = function(store) {
   };
 };
 
-var LinkFactory = function() {
+var LinkFactory = function(store) {
   var count = 0;
 
   this.createLink = function(source, target, orientation) {
-    return new Link(count++, source, target, orientation);
+    store.push(new Link(count++, source, target, orientation));
   };
 };
 
@@ -162,7 +167,7 @@ var PathDrawer = function(pathType, svg, graph) {
     _self.path = _self.path.data(graph.links);
 
     function stylePath(path) {
-      _self.path.classed('selected', function(d) { return d === graph.selected_link; })
+      path.classed('selected', function(d) { return d === graph.selected_link; })
         .style('marker-start', function(d) { return d.left ? 'url(#start-arrow)' : ''; })
         .style('marker-end', function(d) { return d.right ? 'url(#end-arrow)' : ''; });
     }
@@ -173,12 +178,18 @@ var PathDrawer = function(pathType, svg, graph) {
     // add new links
     var newPaths = _self.path.enter().append('svg:path')
       .attr('class', 'link')
-      .on('mousedown', function(d) {
-        if(d3.event.ctrlKey) return;
-
+      .on('click', function(d) {
+        console.log('link clicked');
         graph.selectLink(d);
-
+        d3.event.stopPropagation();
         graphViewer.restart();
+      })
+      .on('mouseover', function(d) {
+        console.log('mouse over ', d);
+        graph.mouseover_link = d;
+      })
+      .on('mouseout', function(d) {
+        graph.mouseover_link = null;
       });
 
     stylePath(newPaths);
@@ -236,13 +247,15 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
   var _self = this;
   this.circle = svg.append('svg:g').selectAll('g');
 
+  this.force = null;
+
   this.update = function() {
     _self.circle.attr('transform', function(d) {
       return 'translate(' + d.x + ',' + d.y + ')';
     });
   };
 
-  this.refreshCircles = function() {
+  this.refreshCircles = function(force) {
     // circle (node) group
     // NB: the function arg is crucial here! nodes are known by id, not by index!
     _self.circle = _self.circle.data(graph.nodes, function(d) { return d.id; });
@@ -257,39 +270,57 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
     g.append('svg:circle')
       .attr('class', 'node')
       .attr('r', 12)
-      .style('fill', function(d) { return (d === graph.selected_node) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id); })
+      .style('fill', function(d) {
+        if (!graph.selected_node) {
+            return colors(d.id);
+        }
+        return (d.id === graph.selected_node.id) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id);
+      })
+      .call(force.drag)
       .style('stroke', function(d) { return d3.rgb(colors(d.id)).darker().toString(); })
       .on('mouseover', function(d) {
-        if(!graph.mousedown_node || d === graph.mousedown_node) return;
+        graph.mouseover_node = d;
+        if(!graph.mousedown_node || d.id === graph.mousedown_node.id || !d3.event.ctrlKey) return;
         // enlarge target node
         d3.select(this).attr('transform', 'scale(1.1)');
-        console.log('mouseOver', d);
+        console.log('mouseOver node: ', d);
       })
       .on('mouseout', function(d) {
-        if(!graph.mousedown_node || d === graph.mousedown_node) return;
+        console.log('mouseout node');
+        graph.mouseover_node = null;
+        if(!graph.mousedown_node || d.id === graph.mousedown_node.id) return;
         // unenlarge target node
         d3.select(this).attr('transform', '');
       })
-      .on('mousedown', function(d) {
-        if(d3.event.ctrlKey) return;
-
-        // select node
+      .on('click', function(d) {
+        console.log('click node');
         graph.selectNode(d);
-
-        // reposition drag line
-        pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
-
+        d3.event.stopPropagation();
         graphViewer.restart();
       })
+      .on('mousedown', function(d) {
+        console.log('mousedown node');
+        //d3.event.preventDefault();
+        graph.setMouseDownNode(d);
+        if(d3.event.ctrlKey) {
+          _self.disableDrag();
+          pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
+          graphViewer.restart();
+        }
+        d3.event.stopPropagation();
+      })
       .on('mouseup', function(d) {
-        if(!graph.mousedown_node) return;
+        if(!graph.mousedown_node || !d3.event.ctrlKey) return;
 
         // needed by FF
         pathDrawer.hideDragLine();
 
         // check for drag-to-self
         graph.mouseup_node = d;
-        if(graph.mouseup_node === graph.mousedown_node) { graph.resetMouseVars(); return; }
+        if(graph.mouseup_node.id === graph.mousedown_node.id) {
+          graph.resetMouseVars();
+          return;
+        }
 
         // unenlarge target node
         d3.select(this).attr('transform', '');
@@ -323,6 +354,7 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         // select new link
         graph.selected_link = link;
         graph.selected_node = null;
+        d3.event.stopPropagation();
         graphViewer.restart();
       });
 
@@ -344,7 +376,7 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
   };
 
   this.enableDrag = function(force) {
-    _self.circle.call(force.drag);
+    _self.circle.selectAll('circle').call(force.drag);
   };
 
 };
@@ -386,12 +418,15 @@ var GraphViewer = function(width, height) {
 
   this.force = ForceFactory({width: width, height: height}, this.graph, this.pathDrawer, this.circleDrawer);
 
+  this.circleDrawer.enableDrag(_self.force);
+
   this.nodeFactory = new NodeFactory(this.graph.nodes);
+  this.linksFactory = new LinkFactory(this.graph.links);
 
   _self.restart = function restart() {
 
     _self.pathDrawer.refreshPaths();
-    _self.circleDrawer.refreshCircles();
+    _self.circleDrawer.refreshCircles(this.force);
     // set the graph in motion
     _self.force.start();
   };
@@ -403,8 +438,9 @@ var GraphViewer = function(width, height) {
     // because :active only works in WebKit?
     _self.svg.classed('active', true);
 
-    if(d3.event.ctrlKey || _self.graph.mousedown_node || _self.graph.mousedown_link) return;
+    if(d3.event.ctrlKey || _self.graph.mousedown_node) return;
 
+    console.log('svg mousedown');
     // insert new node at point
     var point = d3.mouse(this);
 
@@ -414,20 +450,22 @@ var GraphViewer = function(width, height) {
   }
 
   function mousemove() {
-    if(!_self.graph.mousedown_node) return;
+    if (!_self.graph.mousedown_node) return;
 
+    if (d3.event.ctrlKey) {
+      var sx = _self.graph.mousedown_node.x,
+          sy = _self.graph.mousedown_node.y,
+          tx = d3.mouse(this)[0],
+          ty = d3.mouse(this)[1];
 
-    var sx = _self.graph.mousedown_node.x,
-        sy = _self.graph.mousedown_node.y,
-        tx = d3.mouse(this)[0],
-        ty = d3.mouse(this)[1];
+      _self.pathDrawer.updateDragLine(sx, sy, tx, ty, {right: true, left: false});
 
-    _self.pathDrawer.updateDragLine(sx, sy, tx, ty, {right: true, left: false});
-
-    _self.restart();
+      _self.restart();
+    }
   }
 
   function mouseup() {
+    console.log('svg mouseup');
     if(_self.graph.mousedown_node) {
       _self.pathDrawer.hideDragLine();
     }
@@ -437,6 +475,9 @@ var GraphViewer = function(width, height) {
 
     // clear mouse event vars
     _self.graph.resetMouseVars();
+
+    _self.restart();
+
   }
 
   // only respond once per keydown
@@ -450,7 +491,7 @@ var GraphViewer = function(width, height) {
 
     // ctrl
     if(d3.event.keyCode === 17) {
-      _self.circleDrawer.enableDrag(_self.force);
+      _self.circleDrawer.disableDrag();
       _self.svg.classed('ctrl', true);
     }
 
@@ -493,9 +534,24 @@ var GraphViewer = function(width, height) {
 
     // ctrl
     if(d3.event.keyCode === 17) {
-      _self.circleDrawer.disableDrag();
+      _self.circleDrawer.enableDrag(_self.force);
+      _self.pathDrawer.hideDragLine();
       _self.svg.classed('ctrl', false);
     }
+  }
+
+  function click() {
+
+    _self.svg.classed('active', true);
+
+    if(d3.event.ctrlKey || _self.graph.mouseover_node || _self.graph.mouseover_link) return;
+
+    // insert new node at point
+    var point = d3.mouse(this);
+
+    _self.nodeFactory.createNode(point[0], point[1]);
+
+    _self.restart();
   }
 
   _self.svg.on('mousedown', mousedown)
