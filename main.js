@@ -58,7 +58,7 @@ var Graph = function() {
     });
   };
 
-  this.removeSelectedNode = function (node) {
+  this.removeNode = function (node) {
     _self.nodes.splice(_self.nodes.indexOf(node), 1);
     _self.removeLinks(node);
   };
@@ -320,7 +320,7 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         graph.setMouseDownNode(d);
         if(d3.event.ctrlKey) {
           pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
-          graphViewer.restart();
+          //graphViewer.restart();
         }
       })
       .on('mouseup', function(d) {
@@ -482,7 +482,7 @@ var GraphViewer = function(width, height) {
 
       _self.pathDrawer.updateDragLine(sx, sy, tx, ty, {right: true, left: false});
 
-      _self.restart();
+      //_self.restart();
     }
   }
 
