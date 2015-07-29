@@ -10,6 +10,12 @@ var Graph = function() {
   this.mouseup_node = null;
   this.mouseover_link = null;
   this.mousedown_node = null;
+  this.nodeFactory = new NodeFactory(this.nodes);
+  this.linksFactory = new LinkFactory(this.links);
+
+  this.notifyChange = function() {
+    console.warn('Subsribe to onChange event to be notified of changes in the graph');
+  };
 
   this.resetMouseVars = function() {
     this.mousedown_node = null;
@@ -29,6 +35,7 @@ var Graph = function() {
       _self.selected_link = link;
     }
     _self.selected_node = null;
+    _self.notifyChange();
   };
 
   this.selectNode = function (node) {
@@ -39,6 +46,7 @@ var Graph = function() {
       _self.selected_node = node;
     }
     _self.selected_link = null;
+    _self.notifyChange();
   };
 
   this.removeLinks = function(node) {
@@ -67,6 +75,16 @@ var Graph = function() {
     }
     _self.selected_link = null;
     _self.selected_node = null;
+    _self.notifyChange();
+  };
+
+  this.addNode = function(x,y) {
+    _self.nodeFactory.createNode(x,y);
+    _self.notifyChange();
+  };
+
+  this.onChange = function(cb) {
+    _self.notifyChange = cb;
   };
 
 };
@@ -178,18 +196,15 @@ var PathDrawer = function(pathType, svg, graph) {
     // add new links
     var newPaths = _self.path.enter().append('svg:path')
       .attr('class', 'link')
-      .on('click', function(d) {
-        console.log('link clicked');
-        graph.selectLink(d);
-        d3.event.stopPropagation();
-        graphViewer.restart();
-      })
       .on('mouseover', function(d) {
         console.log('mouse over ', d);
         graph.mouseover_link = d;
       })
       .on('mouseout', function(d) {
         graph.mouseover_link = null;
+      })
+      .on('mousedown', function(d) {
+        graph.selectLink(d);
       });
 
     stylePath(newPaths);
@@ -247,8 +262,6 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
   var _self = this;
   this.circle = svg.append('svg:g').selectAll('g');
 
-  this.force = null;
-
   this.update = function() {
     _self.circle.attr('transform', function(d) {
       return 'translate(' + d.x + ',' + d.y + ')';
@@ -262,7 +275,12 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
 
     // update existing nodes (selected visual states)
     _self.circle.selectAll('circle')
-      .style('fill', function(d) { return (d === graph.selected_node) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id); });
+      .style('fill', function(d) {
+        if (!graph.selected_node) {
+            return colors(d.id);
+        }
+        return (d.id === graph.selected_node.id) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id);
+      });
 
     // add new nodes
     var g = _self.circle.enter().append('svg:g');
@@ -276,7 +294,6 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         }
         return (d.id === graph.selected_node.id) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id);
       })
-      .call(force.drag)
       .style('stroke', function(d) { return d3.rgb(colors(d.id)).darker().toString(); })
       .on('mouseover', function(d) {
         graph.mouseover_node = d;
@@ -296,18 +313,15 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         console.log('click node');
         graph.selectNode(d);
         d3.event.stopPropagation();
-        graphViewer.restart();
       })
       .on('mousedown', function(d) {
         console.log('mousedown node');
         //d3.event.preventDefault();
         graph.setMouseDownNode(d);
         if(d3.event.ctrlKey) {
-          _self.disableDrag();
           pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
           graphViewer.restart();
         }
-        d3.event.stopPropagation();
       })
       .on('mouseup', function(d) {
         if(!graph.mousedown_node || !d3.event.ctrlKey) return;
@@ -376,7 +390,7 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
   };
 
   this.enableDrag = function(force) {
-    _self.circle.selectAll('circle').call(force.drag);
+    _self.circle.call(force.drag);
   };
 
 };
@@ -399,8 +413,8 @@ var ForceFactory = function(viewerSize, graph, pathDrawer, circleDrawer) {
 };
 
 var GraphViewer = function(width, height) {
-  width  = width || 960;
-  height = width || 500;
+  width  = width || 600;
+  height = width || 400;
 
   var _self = this;
 
@@ -418,10 +432,7 @@ var GraphViewer = function(width, height) {
 
   this.force = ForceFactory({width: width, height: height}, this.graph, this.pathDrawer, this.circleDrawer);
 
-  this.circleDrawer.enableDrag(_self.force);
-
-  this.nodeFactory = new NodeFactory(this.graph.nodes);
-  this.linksFactory = new LinkFactory(this.graph.links);
+  this.circleDrawer.enableDrag(this.force);
 
   _self.restart = function restart() {
 
@@ -429,7 +440,16 @@ var GraphViewer = function(width, height) {
     _self.circleDrawer.refreshCircles(this.force);
     // set the graph in motion
     _self.force.start();
+
   };
+
+  this.graph.onChange(_self.restart);
+
+  /*this.nodeFactory = new NodeFactory(this.graph.nodes);
+  this.linksFactory = new LinkFactory(this.graph.links);
+  */
+
+
 
   function mousedown() {
     // prevent I-bar on drag
@@ -438,15 +458,17 @@ var GraphViewer = function(width, height) {
     // because :active only works in WebKit?
     _self.svg.classed('active', true);
 
-    if(d3.event.ctrlKey || _self.graph.mousedown_node) return;
+    if(d3.event.ctrlKey || _self.graph.mousedown_node || _self.graph.mouseover_link ) return;
 
     console.log('svg mousedown');
     // insert new node at point
     var point = d3.mouse(this);
 
-    _self.nodeFactory.createNode(point[0], point[1]);
+    _self.graph.addNode(point[0], point[1]);
+    /*_self.nodeFactory.createNode(point[0], point[1]);
 
-    _self.restart();
+    _self.restart();*/
+    _self.circleDrawer.enableDrag(_self.force);
   }
 
   function mousemove() {
@@ -500,7 +522,7 @@ var GraphViewer = function(width, height) {
       case 8: // backspace
       case 46: // delete
         _self.graph.removeSelectedItem();
-        _self.restart();
+        //_self.restart();
         break;
       case 66: // B
         if(_self.graph.selected_link) {
@@ -540,7 +562,7 @@ var GraphViewer = function(width, height) {
     }
   }
 
-  function click() {
+  /*function click() {
 
     _self.svg.classed('active', true);
 
@@ -552,7 +574,7 @@ var GraphViewer = function(width, height) {
     _self.nodeFactory.createNode(point[0], point[1]);
 
     _self.restart();
-  }
+  }*/
 
   _self.svg.on('mousedown', mousedown)
     .on('mousemove', mousemove)
