@@ -92,6 +92,10 @@ text.id {
   top:1px;
 }
 
+.graph-viewer {
+  width: 100%;
+  height: 400px;
+}
 
 .navbar {
   padding: 2px;
