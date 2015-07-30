@@ -1,3 +1,62 @@
+var Node = function(id, x, y) {
+  this.id = id;
+  this.x = x;
+  this.y = y;
+};
+
+var Link = function(id, source, target, orientation) {
+  orientation = orientation || { right: false, left: false};
+  this.id = id;
+  this.source = source;
+  this.target = target;
+  this.right = orientation.right;
+  this.left = orientation.left;
+};
+
+var NodeFactory = function(store) {
+  var count = 0;
+
+  this.createNode = function(x,y) {
+    var node = new Node(count++, x,y);
+    store.push(node);
+    return node;
+  };
+};
+
+var LinkFactory = function(store) {
+  var count = 0;
+
+  this.createLink = function(source, target) {
+
+    // add link to graph (update if exists)
+    // NB: links are strictly source < target; arrows separately specified by booleans
+    var direction;
+    if(source.id < target.id) {
+      direction = 'right';
+    } else {
+      var aux = source;
+      source = target;
+      target = aux;
+      direction = 'left';
+    }
+
+    var link;
+    link = store.filter(function(l) {
+      return (l.source === source && l.target === target);
+    })[0];
+
+    if(link) {
+      link[direction] = true;
+    } else {
+      var orientation = {
+        right: direction === 'right',
+        left: direction === 'left'
+      };
+      store.push(new Link(count++, source, target, orientation));
+    }
+
+  };
+};
 
 var Graph = function() {
   var _self = this;
@@ -11,10 +70,16 @@ var Graph = function() {
   this.mouseover_link = null;
   this.mousedown_node = null;
   this.nodeFactory = new NodeFactory(this.nodes);
-  this.linksFactory = new LinkFactory(this.links);
+  this.linkFactory = new LinkFactory(this.links);
 
   this.notifyChange = function() {
     console.warn('Subsribe to onChange event to be notified of changes in the graph');
+  };
+
+  this.reset = function() {
+    this.nodes.length = 0;
+    this.links.length = 0;
+    this.notifyChange();
   };
 
   this.resetMouseVars = function() {
@@ -49,7 +114,7 @@ var Graph = function() {
     _self.notifyChange();
   };
 
-  this.removeLinks = function(node) {
+  var removeLinks = function(node) {
     var toSplice = _self.links.filter(function(l) {
       return (l.source === node || l.target === node);
     });
@@ -58,20 +123,20 @@ var Graph = function() {
     });
   };
 
-  this.removeNode = function (node) {
+  var removeNode = function (node) {
     _self.nodes.splice(_self.nodes.indexOf(node), 1);
-    _self.removeLinks(node);
+    removeLinks(node);
   };
 
-  this.removeLink = function(link) {
-    _self.links.splice(_self.graph.links.indexOf(link), 1);
+  var removeLink = function(link) {
+    _self.links.splice(_self.links.indexOf(link), 1);
   };
 
   this.removeSelectedItem = function() {
     if(_self.selected_node) {
-      _self.removeNode(_self.selected_node);
+      removeNode(_self.selected_node);
     } else if(_self.selected_link) {
-      _self.removeLink(_self.selected_link);
+      removeLink(_self.selected_link);
     }
     _self.selected_link = null;
     _self.selected_node = null;
@@ -79,7 +144,32 @@ var Graph = function() {
   };
 
   this.addNode = function(x,y) {
-    _self.nodeFactory.createNode(x,y);
+    var node = _self.nodeFactory.createNode(x,y);
+    _self.notifyChange();
+    return node;
+  };
+
+  this.addLink = function(source, target, direction) {
+    if (direction !== 'right' && direction !== 'left') {
+      direction = 'right';
+    }
+    var link;
+    link = _self.links.filter(function(l) {
+      return (l.source === source && l.target === target);
+    })[0];
+
+    if(link) {
+      link[direction] = true;
+    } else {
+      var orientation = {
+        right: direction === 'right',
+        left: direction === 'left'
+      };
+      _self.linkFactory.createLink(source,target, orientation);
+    }
+
+    graph.selected_link = null;
+    graph.selected_node = null;
     _self.notifyChange();
   };
 
@@ -89,46 +179,8 @@ var Graph = function() {
 
 };
 
-var Node = function(id, x, y) {
-  this.id = id;
-  this.x = x;
-  this.y = y;
-};
-
-var Link = function(id, source, target, orientation) {
-  this.id = id;
-  this.source = source;
-  this.target = target;
-  this.right = orientation.right;
-  this.left = orientation.left;
-};
-
-var NodeFactory = function(store) {
-  var count = 0;
-
-  this.createNode = function(x,y) {
-    store.push(new Node(count++, x,y));
-  };
-};
-
-var LinkFactory = function(store) {
-  var count = 0;
-
-  this.createLink = function(source, target, orientation) {
-    store.push(new Link(count++, source, target, orientation));
-  };
-};
-
 var PathDrawer = function(pathType, svg, graph) {
   var _self = this;
-
-  this.pathType = pathType || PathDrawer.pathTypes.LINE;
-
-  this.path = svg.append('svg:g').selectAll('path');
-
-  this.getFormula = function(sx, sy, tx, ty, orientation) {
-    return PathDrawer.formulas[this.pathType](sx,sy,tx,ty, orientation);
-  };
 
   svg.append('svg:defs').append('svg:marker')
       .attr('id', 'end-arrow')
@@ -151,6 +203,14 @@ var PathDrawer = function(pathType, svg, graph) {
     .append('svg:path')
       .attr('d', 'M10,-5L0,0L10,5')
       .attr('fill', '#000');
+
+  this.pathType = pathType || PathDrawer.pathTypes.LINE;
+
+  this.path = svg.append('svg:g').selectAll('path');
+
+  this.getFormula = function(sx, sy, tx, ty, orientation) {
+    return PathDrawer.formulas[this.pathType](sx,sy,tx,ty, orientation);
+  };
 
   // line displayed when dragging new nodes
   this.drag_line = svg.append('svg:path')
@@ -196,14 +256,14 @@ var PathDrawer = function(pathType, svg, graph) {
     // add new links
     var newPaths = _self.path.enter().append('svg:path')
       .attr('class', 'link')
-      .on('mouseover', function(d) {
+      .on('mouseover', function linkMouseOver(d) {
         console.log('mouse over ', d);
         graph.mouseover_link = d;
       })
-      .on('mouseout', function(d) {
+      .on('mouseout', function linkMouseOut(d) {
         graph.mouseover_link = null;
       })
-      .on('mousedown', function(d) {
+      .on('mousedown', function linkMouseDown(d) {
         graph.selectLink(d);
       });
 
@@ -295,35 +355,32 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         return (d.id === graph.selected_node.id) ? d3.rgb(colors(d.id)).brighter().toString() : colors(d.id);
       })
       .style('stroke', function(d) { return d3.rgb(colors(d.id)).darker().toString(); })
-      .on('mouseover', function(d) {
+      .on('mouseover', function nodeMouseOver(d) {
         graph.mouseover_node = d;
         if(!graph.mousedown_node || d.id === graph.mousedown_node.id || !d3.event.ctrlKey) return;
         // enlarge target node
         d3.select(this).attr('transform', 'scale(1.1)');
-        console.log('mouseOver node: ', d);
       })
-      .on('mouseout', function(d) {
+      .on('mouseout', function nodeMouseOut(d) {
         console.log('mouseout node');
         graph.mouseover_node = null;
         if(!graph.mousedown_node || d.id === graph.mousedown_node.id) return;
+
         // unenlarge target node
         d3.select(this).attr('transform', '');
       })
-      .on('click', function(d) {
-        console.log('click node');
+      .on('click', function nodeClick(d) {
         graph.selectNode(d);
         d3.event.stopPropagation();
       })
-      .on('mousedown', function(d) {
-        console.log('mousedown node');
-        //d3.event.preventDefault();
+      .on('mousedown', function nodeMouseDown(d) {
         graph.setMouseDownNode(d);
         if(d3.event.ctrlKey) {
           pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
           //graphViewer.restart();
         }
       })
-      .on('mouseup', function(d) {
+      .on('mouseup', function nodeMouseUp(d) {
         if(!graph.mousedown_node || !d3.event.ctrlKey) return;
 
         // needed by FF
@@ -339,37 +396,10 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         // unenlarge target node
         d3.select(this).attr('transform', '');
 
-        // add link to graph (update if exists)
-        // NB: links are strictly source < target; arrows separately specified by booleans
-        var source, target, direction;
-        if(graph.mousedown_node.id < graph.mouseup_node.id) {
-          source = graph.mousedown_node;
-          target = graph.mouseup_node;
-          direction = 'right';
-        } else {
-          source = graph.mouseup_node;
-          target = graph.mousedown_node;
-          direction = 'left';
-        }
+        graph.addLink(graph.mousedown_node, graph.mouseup_node);
+        graph.mousedown_node = null;
 
-        var link;
-        link = graph.links.filter(function(l) {
-          return (l.source === source && l.target === target);
-        })[0];
-
-        if(link) {
-          link[direction] = true;
-        } else {
-          link = {source: source, target: target, left: false, right: false};
-          link[direction] = true;
-          graph.links.push(link);
-        }
-
-        // select new link
-        graph.selected_link = link;
-        graph.selected_node = null;
         d3.event.stopPropagation();
-        graphViewer.restart();
       });
 
     // show node IDs
@@ -412,13 +442,11 @@ var ForceFactory = function(viewerSize, graph, pathDrawer, circleDrawer) {
     .on('tick', tick);
 };
 
-var GraphViewer = function(width, height) {
-  width  = width || 600;
-  height = width || 400;
+var GraphViewer = function(width, height, graph) {
 
   var _self = this;
 
-  this.graph = new Graph();
+  this.graph = graph;
 
   this.colors = d3.scale.category10();
 
@@ -445,12 +473,6 @@ var GraphViewer = function(width, height) {
 
   this.graph.onChange(_self.restart);
 
-  /*this.nodeFactory = new NodeFactory(this.graph.nodes);
-  this.linksFactory = new LinkFactory(this.graph.links);
-  */
-
-
-
   function mousedown() {
     // prevent I-bar on drag
     //d3.event.preventDefault();
@@ -465,9 +487,7 @@ var GraphViewer = function(width, height) {
     var point = d3.mouse(this);
 
     _self.graph.addNode(point[0], point[1]);
-    /*_self.nodeFactory.createNode(point[0], point[1]);
 
-    _self.restart();*/
     _self.circleDrawer.enableDrag(_self.force);
   }
 
@@ -490,6 +510,12 @@ var GraphViewer = function(width, height) {
     console.log('svg mouseup');
     if(_self.graph.mousedown_node) {
       _self.pathDrawer.hideDragLine();
+
+      if (d3.event.ctrlKey) {
+        var point = d3.mouse(this);
+        var node = _self.graph.addNode(point[0], point[1]);
+        _self.graph.addLink(_self.graph.mousedown_node, node);
+      }
     }
 
     // because :active only works in WebKit?
@@ -497,8 +523,6 @@ var GraphViewer = function(width, height) {
 
     // clear mouse event vars
     _self.graph.resetMouseVars();
-
-    _self.restart();
 
   }
 
@@ -562,20 +586,6 @@ var GraphViewer = function(width, height) {
     }
   }
 
-  /*function click() {
-
-    _self.svg.classed('active', true);
-
-    if(d3.event.ctrlKey || _self.graph.mouseover_node || _self.graph.mouseover_link) return;
-
-    // insert new node at point
-    var point = d3.mouse(this);
-
-    _self.nodeFactory.createNode(point[0], point[1]);
-
-    _self.restart();
-  }*/
-
   _self.svg.on('mousedown', mousedown)
     .on('mousemove', mousemove)
     .on('mouseup', mouseup);
@@ -589,4 +599,6 @@ var GraphViewer = function(width, height) {
 
 var colors = d3.scale.category10();
 
-var graphViewer = new GraphViewer();
+var graph = new Graph();
+
+var graphViewer = new GraphViewer(600, 400, graph);
