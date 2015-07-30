@@ -64,7 +64,7 @@ var PathDrawer = function(pathType, svg, graph) {
     _self.path = _self.path.data(graph.links);
 
     function stylePath(path) {
-      path.classed('selected', function(d) { return d === graph.selected_link; })
+      path.classed('selected', function(d) { return graph.selected_link && d.id === graph.selected_link.id; })
         .style('marker-start', function(d) { return d.left ? 'url(#start-arrow)' : ''; })
         .style('marker-end', function(d) { return d.right ? 'url(#end-arrow)' : ''; });
     }
@@ -76,7 +76,6 @@ var PathDrawer = function(pathType, svg, graph) {
     var newPaths = _self.path.enter().append('svg:path')
       .attr('class', 'link')
       .on('mouseover', function linkMouseOver(d) {
-        console.log('mouse over ', d);
         graph.mouseover_link = d;
       })
       .on('mouseout', function linkMouseOut(d) {
@@ -181,7 +180,6 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         d3.select(this).attr('transform', 'scale(1.1)');
       })
       .on('mouseout', function nodeMouseOut(d) {
-        console.log('mouseout node');
         graph.mouseover_node = null;
         if(!graph.mousedown_node || d.id === graph.mousedown_node.id) return;
 
@@ -299,7 +297,6 @@ var GraphViewer = function(width, height, graph) {
 
     if(d3.event.ctrlKey || _self.graph.mousedown_node || _self.graph.mouseover_link ) return;
 
-    console.log('svg mousedown');
     // insert new node at point
     var point = d3.mouse(this);
 
@@ -324,7 +321,6 @@ var GraphViewer = function(width, height, graph) {
   }
 
   function mouseup() {
-    console.log('svg mouseup');
     if(_self.graph.mousedown_node) {
       _self.pathDrawer.hideDragLine();
 
@@ -411,6 +407,7 @@ var GraphViewer = function(width, height, graph) {
     .on('keydown', keydown)
     .on('keyup', keyup);
 
+  //_self.svg.call(d3.behavior.zoom().on("zoom", _self.restart)) ;
   this.restart();
 };
 
@@ -453,7 +450,11 @@ d3.select('#importButton').on('click', function() {
   //d3.select('#importInput')[0].click();
   document.getElementById("importInput").click();
 });
-//d3.select('#uploadButton').on('click', noop);
+d3.select('#exportButton').on('click', function() {
+  var json = graph.toJSON();
+  var blob = new Blob([JSON.stringify(json)], {type: "text/plain;charset=utf-8"});
+  saveAs(blob, 'export.json');
+});
 d3.select('#changeLinkType').on('click', function () {
   if (graphViewer.pathDrawer.pathType === PathDrawer.pathTypes.LINE) {
     graphViewer.pathDrawer.pathType = PathDrawer.pathTypes.CURVE;
@@ -464,5 +465,19 @@ d3.select('#changeLinkType').on('click', function () {
     this.textContent = 'Curved links';
   }
   graphViewer.restart();
+});
+
+graph.onChange(function() {
+
+  var value  = '';
+
+  if (graph.selected_node) {
+    value = 'Node: ' + graph.selected_node.id;
+  }
+  if (graph.selected_link) {
+    value = 'Link: ' + graph.selected_link.id;
+  }
+
+  document.getElementById('selectedItem').textContent = value;
 });
 

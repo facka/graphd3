@@ -44,6 +44,27 @@ var Graph = function() {
     _self.notifyChange();
   };
 
+  this.toJSON = function() {
+    var json = {};
+    json.nodes = _self.nodes.map(function(node) {
+      return {
+        id: ''+node.id
+      };
+    });
+    var formattedLinks = _self.links.map(function(link) {
+      return {
+        id: ''+link.id,
+        source: ''+link.source.id,
+        target: ''+link.target.id,
+        left: link.left,
+        right: link.right
+      };
+    });
+    json.links = formattedLinks;
+
+    return json;
+  };
+
   this.reset = function() {
     _self.nodes.length = 0;
     _self.links.length = 0;

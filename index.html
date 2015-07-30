@@ -15,18 +15,29 @@
         <button id="exportButton" class="button"> Export </button>
         <button id="changeLinkType" class="button"> Curved links </button>
     </div>
-    <div class="center">
+    <div class="main">
         <div id="graph"></div>
     </div>
-    <h2>Help:</h2>
-    <div><strong>Click anywhere:</strong> add a new Node</div>
-    <div><strong>Ctrl + drag a node:</strong> creates a link to:</div>
-    <div>&nbsp;&nbsp;&nbsp; - existing node if the link is dropped over a node</div>
-    <div>&nbsp;&nbsp;&nbsp; - new node if the link is not dropped over a node</div>
-    <div><strong>Drag a node:</strong> moves it</div>
+    <div class="sidebar">
+        <h3>Info:</h3>
+        <div>Selected Item: <span id="selectedItem"></span></div>
+    </div>
+    <div class="footer">
+        <h2>Help:</h2>
+        <div><strong>Click anywhere:</strong> add a new Node</div>
+        <div><strong>Ctrl + drag a node:</strong> creates a link to:</div>
+        <div>&nbsp;&nbsp;&nbsp; - existing node if the link is dropped over a node</div>
+        <div>&nbsp;&nbsp;&nbsp; - new node if the link is not dropped over a node</div>
+        <div><strong>Drag a node:</strong> moves it</div>
+        <div><strong>Key R:</strong>Set right direction to the selected link</div>
+        <div><strong>Key L:</strong>Set left direction to the selected link</div>
+        <div><strong>Key B:</strong>Set both directions to the selected link</div>
+        <div><strong>Key supr/delete:</strong>Deletes the selected item. If the selected item is a node also deletes all its links</div>
+    </div>
   </body>
 
   <script src="http://d3js.org/d3.v3.js"></script>
+  <script src="//cdn.jsdelivr.net/filesaver.js/0.1/FileSaver.min.js"></script>
   <script src="models.js"></script>
   <script src="factories.js"></script>
   <script src="graph.js"></script>
