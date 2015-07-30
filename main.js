@@ -57,11 +57,30 @@ var PathDrawer = function(pathType, svg, graph) {
     _self.path.attr('d', function (d) {
       return _self.getFormula(d.source.x, d.source.y, d.target.x, d.target.y, {left: d.left, right: d.right});
     });
+
+    _self.label.attr("x", function(d) {
+        return 100;//((d.source.x + d.target.x)/2);
+    })
+    .attr("y", function(d) {
+        return 100;//((d.source.y + d.target.y)/2);
+    });
   };
 
   this.refreshPaths = function() {
-    // path (link) group
+
     _self.path = _self.path.data(graph.links);
+
+    _self.label = svg.selectAll(".link")
+        .append("text")
+        .attr("class", "path")
+        .attr("font-family", "Arial, Helvetica, sans-serif")
+        .attr("fill", "Black")
+        .style("font", "normal 12px Arial")
+        .attr("dy", ".35em")
+        .attr("text-anchor", "middle")
+        .text(function(d) {
+            return 'd.id';
+        });
 
     function stylePath(path) {
       path.classed('selected', function(d) { return graph.selected_link && d.id === graph.selected_link.id; })
@@ -73,8 +92,11 @@ var PathDrawer = function(pathType, svg, graph) {
     stylePath(_self.path);
 
     // add new links
-    var newPaths = _self.path.enter().append('svg:path')
-      .attr('class', 'link')
+    var newPaths = _self.path.enter()
+      .append("g")
+      .attr("class", "link")
+      .append("path")
+      .attr("class", "path")
       .on('mouseover', function linkMouseOver(d) {
         graph.mouseover_link = d;
       })
@@ -190,11 +212,11 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
         graph.selectNode(d);
         d3.event.stopPropagation();
       })
+      .on("dblclick", function(d) { d.fixed = !d.fixed; })
       .on('mousedown', function nodeMouseDown(d) {
         graph.setMouseDownNode(d);
         if(d3.event.ctrlKey) {
           pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
-          //graphViewer.restart();
         }
       })
       .on('mouseup', function nodeMouseUp(d) {
