@@ -8,8 +8,23 @@
 
   <body>
     <h1>Graph Editor</h1>
+    <div class="navbar">
+        <button id="clearButton" class="button"> Clear </button>
+        <input type="file" id="importInput" style="display:none" accept="json">
+        <button id="importButton" class="button"> Import </button>
+        <button id="exportButton" class="button"> Export </button>
+    </div>
+    <div>
+        <div id="graph"></div>
+    </div>
+    <h2>Help:</h2>
+    <div><strong>Click anywhere:</strong> add a new Node</div>
+    <div><strong>Ctrl + drag a node:</strong> creates a link to:</div>
+    <div>&nbsp;&nbsp;&nbsp; - existing node if the link is dropped over a node</div>
+    <div>&nbsp;&nbsp;&nbsp; - new node if the link is not dropped over a node</div>
+    <div><strong>Drag a node:</strong> moves it</div>
   </body>
 
-  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="http://d3js.org/d3.v3.js"></script>
   <script src="main.js"></script>
 </html>

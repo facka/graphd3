@@ -16,8 +16,8 @@ var Link = function(id, source, target, orientation) {
 var NodeFactory = function(store) {
   var count = 0;
 
-  this.createNode = function(x,y) {
-    var node = new Node(count++, x,y);
+  this.createNode = function(id, x,y) {
+    var node = new Node(id || count++, x,y);
     store.push(node);
     return node;
   };
@@ -73,13 +73,40 @@ var Graph = function() {
   this.linkFactory = new LinkFactory(this.links);
 
   this.notifyChange = function() {
-    console.warn('Subsribe to onChange event to be notified of changes in the graph');
+    //console.warn('Subsribe to onChange event to be notified of changes in the graph');
+    this.listeners.forEach(function(fn) {
+      fn();
+    });
+  };
+
+  this.listeners = [];
+
+  this.getNode = function(id) {
+    var node = _self.nodes.filter(function(node) {
+      return node.id === id;
+    })[0];
+    return node;
+  };
+
+  this.import = function (jsonGraph) {
+    jsonGraph.nodes.forEach(function(node) {
+      _self.nodeFactory.createNode(node.id);
+    });
+    jsonGraph.links.forEach(function(link) {
+      var orientation = {
+        right: link.right,
+        left: link.left
+      };
+
+      _self.linkFactory.createLink(_self.getNode(link.source), _self.getNode(link.target), orientation);
+    });
+    _self.notifyChange();
   };
 
   this.reset = function() {
-    this.nodes.length = 0;
-    this.links.length = 0;
-    this.notifyChange();
+    _self.nodes.length = 0;
+    _self.links.length = 0;
+    _self.notifyChange();
   };
 
   this.resetMouseVars = function() {
@@ -144,7 +171,7 @@ var Graph = function() {
   };
 
   this.addNode = function(x,y) {
-    var node = _self.nodeFactory.createNode(x,y);
+    var node = _self.nodeFactory.createNode(null,x,y);
     _self.notifyChange();
     return node;
   };
@@ -165,7 +192,7 @@ var Graph = function() {
         right: direction === 'right',
         left: direction === 'left'
       };
-      _self.linkFactory.createLink(source,target, orientation);
+      _self.linkFactory.createLink(source, target, orientation);
     }
 
     graph.selected_link = null;
@@ -174,7 +201,7 @@ var Graph = function() {
   };
 
   this.onChange = function(cb) {
-    _self.notifyChange = cb;
+    _self.listeners.push(cb);
   };
 
 };
@@ -425,21 +452,14 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
 
 };
 
-var ForceFactory = function(viewerSize, graph, pathDrawer, circleDrawer) {
-  var _self = this;
-
-  function tick() {
-    pathDrawer.update();
-    circleDrawer.update();
-  }
+var ForceFactory = function(viewerSize, graph) {
 
   return d3.layout.force()
     .nodes(graph.nodes)
     .links(graph.links)
     .size([viewerSize.width, viewerSize.height])
     .linkDistance(150)
-    .charge(-500)
-    .on('tick', tick);
+    .charge(-500);
 };
 
 var GraphViewer = function(width, height, graph) {
@@ -450,7 +470,7 @@ var GraphViewer = function(width, height, graph) {
 
   this.colors = d3.scale.category10();
 
-  this.svg = d3.select('body').append('svg');
+  this.svg = d3.select('#graph').append('svg');
 
   this.svg.attr('width', width);
   this.svg.attr('height', height);
@@ -458,7 +478,11 @@ var GraphViewer = function(width, height, graph) {
   this.pathDrawer = new PathDrawer(PathDrawer.pathTypes.LINE, this.svg, this.graph);
   this.circleDrawer = new CircleDrawer(this.svg, this.graph, this.pathDrawer);
 
-  this.force = ForceFactory({width: width, height: height}, this.graph, this.pathDrawer, this.circleDrawer);
+  this.force = ForceFactory({width: width, height: height}, this.graph);
+  this.force.on('tick', function () {
+    _self.pathDrawer.update();
+    _self.circleDrawer.update();
+  });
 
   this.circleDrawer.enableDrag(this.force);
 
@@ -602,3 +626,39 @@ var colors = d3.scale.category10();
 var graph = new Graph();
 
 var graphViewer = new GraphViewer(600, 400, graph);
+
+d3.select('#clearButton').on('click', graph.reset);
+
+d3.select('#importInput').on('change', function() {
+  if (window.File && window.FileReader && window.FileList && window.Blob) {
+    var jsonFile = this.files[0];
+    var filereader = new window.FileReader();
+
+    graph.reset();
+
+    filereader.onload = function(){
+      var fileContent = filereader.result;
+      var jsonGraph;
+      try{
+        jsonGraph = JSON.parse(fileContent);
+      }catch(err){
+        window.alert("Error importing graph. \nError message: " + err.message);
+        return;
+      }
+
+      graph.import(jsonGraph);
+      graphViewer.circleDrawer.enableDrag();
+    };
+    filereader.readAsText(jsonFile);
+    this.value = null;
+  } else {
+    alert("Update your browser to support file management");
+  }
+
+});
+d3.select('#importButton').on('click', function() {
+  //d3.select('#importInput')[0].click();
+  document.getElementById("importInput").click();
+});
+d3.select('#uploadButton').on('click', graph.reset);
+
