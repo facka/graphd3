@@ -14,13 +14,16 @@
         <button id="importButton" class="button"> Import </button>
         <button id="exportButton" class="button"> Export </button>
         <button id="changeLinkType" class="button"> Curved links </button>
+        <button id="toggleLinkLabels" class="button"> Hide link labels </button>
+        <button id="toggleNodeLabels" class="button"> Hide node labels </button>
     </div>
     <div class="main">
         <div id="graph"></div>
     </div>
     <div class="sidebar">
         <h3>Info:</h3>
-        <div>Selected Item: <span id="selectedItem"></span></div>
+        <div><span id="selectedItem"></span></div>
+        <button id="changeId" class="button"> Edit label </button>
     </div>
     <div class="footer">
         <h2>Help:</h2>
@@ -38,9 +41,12 @@
   </body>
 
   <script src="http://d3js.org/d3.v3.js"></script>
+  <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
   <script src="//cdn.jsdelivr.net/filesaver.js/0.1/FileSaver.min.js"></script>
   <script src="models.js"></script>
   <script src="factories.js"></script>
   <script src="graph.js"></script>
+  <script src="pathType.js"></script>
   <script src="main.js"></script>
 </html>
+

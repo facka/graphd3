@@ -17,27 +17,31 @@ svg:not(.active):not(.ctrl) {
   cursor: crosshair;
 }
 
-path.link {
+path.path {
   fill: none;
-  stroke: #000;
+  stroke: #777;
   stroke-width: 4px;
   cursor: default;
 }
 
-svg:not(.active):not(.ctrl) path.link {
+svg:not(.active):not(.ctrl) path.path {
   cursor: pointer;
 }
 
-path.link.selected {
+path.path.selected {
   stroke-dasharray: 10,2;
-  stroke: #333;
+  stroke: #393;
 }
 
-path.link.dragline {
+path.dragline {
   pointer-events: none;
+  fill: none;
+  stroke: #777;
+  stroke-width: 4px;
+  cursor: default;
 }
 
-path.link.hidden {
+path.dragline.hidden {
   stroke-width: 0;
 }
 

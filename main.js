@@ -1,44 +1,14 @@
-var PathDrawer = function(pathType, svg, graph) {
+var DraglineDrawer = function(svg, pathType) {
   var _self = this;
-
-  svg.append('svg:defs').append('svg:marker')
-      .attr('id', 'end-arrow')
-      .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 6)
-      .attr('markerWidth', 3)
-      .attr('markerHeight', 3)
-      .attr('orient', 'auto')
-    .append('svg:path')
-      .attr('d', 'M0,-5L10,0L0,5')
-      .attr('fill', '#000');
-
-  svg.append('svg:defs').append('svg:marker')
-      .attr('id', 'start-arrow')
-      .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 4)
-      .attr('markerWidth', 3)
-      .attr('markerHeight', 3)
-      .attr('orient', 'auto')
-    .append('svg:path')
-      .attr('d', 'M10,-5L0,0L10,5')
-      .attr('fill', '#000');
-
-  this.pathType = pathType || PathDrawer.pathTypes.LINE;
-
-  this.path = svg.append('svg:g').selectAll('path');
-
-  this.getFormula = function(sx, sy, tx, ty, orientation) {
-    return PathDrawer.formulas[this.pathType](sx,sy,tx,ty, orientation);
-  };
-
   // line displayed when dragging new nodes
   this.drag_line = svg.append('svg:path')
-    .attr('class', 'link dragline hidden')
+    .attr('class', 'dragline hidden')
     .attr('d', 'M0,0L0,0');
+  this.pathType = pathType;
 
   this.updateDragLine = function (sx,sy,tx,ty, orientation) {
     _self.drag_line.attr('d', function() {
-      return _self.getFormula(sx, sy, tx, ty, orientation);
+      return _self.pathType.getFormula(sx, sy, tx, ty, orientation);
     });
   };
 
@@ -52,51 +22,63 @@ var PathDrawer = function(pathType, svg, graph) {
                    .classed('hidden', false);
     _self.updateDragLine(sx,sy,tx,ty, {right: false, left: false});
   };
+};
+
+var PathDrawer = function(svg, graph, pathType) {
+  var _self = this;
+  this.pathType = pathType;
+  this.path = svg.append('svg:g').selectAll('path');
 
   this.update = function () {
     _self.path.attr('d', function (d) {
-      return _self.getFormula(d.source.x, d.source.y, d.target.x, d.target.y, {left: d.left, right: d.right});
+      return _self.pathType.getFormula(d.source.x, d.source.y, d.target.x, d.target.y, {left: d.left, right: d.right});
     });
 
-    _self.label.attr("x", function(d) {
-        return 100;//((d.source.x + d.target.x)/2);
+    svg.selectAll('.link-label').attr("x", function(d) {
+        return ((d.source.x + d.target.x)/2);
     })
     .attr("y", function(d) {
-        return 100;//((d.source.y + d.target.y)/2);
+        return ((d.source.y + d.target.y)/2);
     });
+
+    var paths = document.querySelectorAll('.path');
+    for (var i =0; i < paths.length; i++) {
+      var path = paths[i];
+      path.setAttribute('d', path.parentNode.getAttribute('d'));
+
+    }
+
   };
 
   this.refreshPaths = function() {
 
-    _self.path = _self.path.data(graph.links);
+    _self.path = _self.path.data(graph.links, function(d) { return d.id; });
 
-    _self.label = svg.selectAll(".link")
-        .append("text")
-        .attr("class", "path")
-        .attr("font-family", "Arial, Helvetica, sans-serif")
-        .attr("fill", "Black")
-        .style("font", "normal 12px Arial")
-        .attr("dy", ".35em")
-        .attr("text-anchor", "middle")
-        .text(function(d) {
-            return 'd.id';
-        });
+    function getMarker(d, arrowType) {
+      if (graph.selected_link && d.id === graph.selected_link.id) {
+        return 'url(#'+arrowType+'-selected)';
+      }
+      else {
+        return 'url(#'+arrowType+')';
+      }
+    }
 
     function stylePath(path) {
       path.classed('selected', function(d) { return graph.selected_link && d.id === graph.selected_link.id; })
-        .style('marker-start', function(d) { return d.left ? 'url(#start-arrow)' : ''; })
-        .style('marker-end', function(d) { return d.right ? 'url(#end-arrow)' : ''; });
+        .style('marker-start', function(d) { return d.left ? getMarker(d,'start-arrow') : ''; })
+        .style('marker-end', function(d) { return d.right ? getMarker(d,'end-arrow') : ''; });
+        /*.style('marker-start', function(d) {
+          return d.left ? ((graph.selected_link && d.id === graph.selected_link.id) ? 'url(#start-arrow-selected)' : 'url(#start-arrow)') : '';
+        })
+        .style('marker-end', function(d) {
+          return d.left ? ((graph.selected_link && d.id === graph.selected_link.id) ? 'url(#end-arrow-selected)' : 'url(#end-arrow)') : '';
+        });*/
     }
 
-    // update existing links
-    stylePath(_self.path);
+    var g = _self.path.enter().append('svg:g');
 
-    // add new links
-    var newPaths = _self.path.enter()
-      .append("g")
-      .attr("class", "link")
-      .append("path")
-      .attr("class", "path")
+    g.append('svg:path')
+      .attr('class', 'path')
       .on('mouseover', function linkMouseOver(d) {
         graph.mouseover_link = d;
       })
@@ -107,7 +89,21 @@ var PathDrawer = function(pathType, svg, graph) {
         graph.selectLink(d);
       });
 
-    stylePath(newPaths);
+    // show node IDs
+    g.append('svg:text')
+        .attr("class", "link-label")
+        .attr("font-family", "Arial, Helvetica, sans-serif")
+        .attr("fill", "Black")
+        .style("font", "normal 14px Arial")
+        .attr("dy", ".35em")
+        .attr("text-anchor", "middle")
+        .text(function(d) { return graph.config.showLinkLabels ? (d.label || d.id) : ''; });
+
+    _self.path.selectAll('.link-label')
+      .text(function(d) { return graph.config.showLinkLabels ? (d.label || d.id) : ''; });
+
+    // update existing links
+    stylePath(_self.path.selectAll('path'));
 
     // remove old links
     _self.path.exit().remove();
@@ -115,50 +111,7 @@ var PathDrawer = function(pathType, svg, graph) {
 
 };
 
-PathDrawer.pathTypes = {
-  'LINE' : 'line',
-  'CURVE' : 'curve'
-};
-
-PathDrawer.formulas = {
-  line:  function(sx, sy, tx, ty, orientation) {
-      var deltaX = tx - sx,
-          deltaY = ty - sy,
-          dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY),
-          normX = deltaX / dist,
-          normY = deltaY / dist,
-          sourcePadding = orientation.left ? 17 : 12,
-          targetPadding = orientation.right ? 17 : 12,
-          sourceX = sx + (sourcePadding * normX),
-          sourceY = sy + (sourcePadding * normY),
-          targetX = tx - (targetPadding * normX),
-          targetY = ty - (targetPadding * normY);
-      sourceX = sourceX || 0;
-      sourceY = sourceY || 0;
-      targetX = targetX || 0;
-      targetY = targetY || 0;
-      return 'M' + sourceX + ',' + sourceY + 'L' + targetX + ',' + targetY;
-    },
-    curve: function(sx, sy, tx, ty, orientation) {
-      var dx = tx - sx,
-          dy = ty - sy;
-      var dr = 2 * Math.sqrt(dx * dx + dy * dy);
-      var deltaX = tx - sx,
-          deltaY = ty - sy,
-          dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY),
-          normX = deltaX / dist,
-          normY = deltaY / dist,
-          sourcePadding = orientation.left ? 17 : 12,
-          targetPadding = orientation.right ? 17 : 12,
-          sourceX = sx + (sourcePadding * normX),
-          sourceY = sy + (sourcePadding * normY),
-          targetX = tx - (targetPadding * normX),
-          targetY = ty - (targetPadding * normY);
-      return "M" + sx + "," + sy + "A" + dr + "," + dr + " 0 0,0 " + tx + "," + ty;
-    }
-};
-
-var CircleDrawer = function (svg, graph, pathDrawer) {
+var CircleDrawer = function (svg, graph, dragLineDrawer) {
   var _self = this;
   this.circle = svg.append('svg:g').selectAll('g');
 
@@ -216,14 +169,14 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
       .on('mousedown', function nodeMouseDown(d) {
         graph.setMouseDownNode(d);
         if(d3.event.ctrlKey) {
-          pathDrawer.resetDragLine(d.x,d.y,d.x,d.y);
+          dragLineDrawer.resetDragLine(d.x,d.y,d.x,d.y);
         }
       })
       .on('mouseup', function nodeMouseUp(d) {
         if(!graph.mousedown_node || !d3.event.ctrlKey) return;
 
         // needed by FF
-        pathDrawer.hideDragLine();
+        dragLineDrawer.hideDragLine();
 
         // check for drag-to-self
         graph.mouseup_node = d;
@@ -243,10 +196,13 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
 
     // show node IDs
     g.append('svg:text')
-        .attr('x', 0)
+        .attr('x', -4)
         .attr('y', 4)
-        .attr('class', 'id')
-        .text(function(d) { return d.id; });
+        .attr('class', 'node-label')
+        .text(function(d) { return graph.config.showNodeLabels ? (d.label || d.id) : '';});
+
+    _self.circle.selectAll('.node-label')
+      .text(function(d) { return graph.config.showNodeLabels ? (d.label || d.id) : ''; });
 
     // remove old nodes
     _self.circle.exit().remove();
@@ -264,16 +220,6 @@ var CircleDrawer = function (svg, graph, pathDrawer) {
 
 };
 
-var ForceFactory = function(viewerSize, graph) {
-
-  return d3.layout.force()
-    .nodes(graph.nodes)
-    .links(graph.links)
-    .size([viewerSize.width, viewerSize.height])
-    .linkDistance(150)
-    .charge(-500);
-};
-
 var GraphViewer = function(width, height, graph) {
 
   var _self = this;
@@ -282,16 +228,77 @@ var GraphViewer = function(width, height, graph) {
 
   this.colors = d3.scale.category10();
 
+  this.config = {};
+  this.config.showLinkLabels = true;
+  this.config.showNodeLabels = true;
+
+  this.graph.config = this.config;
+
   this.svg = d3.select('#graph').append('svg');
 
   this.svg.attr('width', width);
   this.svg.attr('height', height);
   this.svg.attr('class', 'graph-viewer');
 
-  this.pathDrawer = new PathDrawer(PathDrawer.pathTypes.LINE, this.svg, this.graph);
-  this.circleDrawer = new CircleDrawer(this.svg, this.graph, this.pathDrawer);
+  this.svg.append('svg:defs').append('svg:marker')
+      .attr('id', 'end-arrow')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 6)
+      .attr('markerWidth', 3)
+      .attr('markerHeight', 3)
+      .attr('orient', 'auto')
+    .append('svg:path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#777');
 
-  this.force = ForceFactory({width: width, height: height}, this.graph);
+  this.svg.append('svg:defs').append('svg:marker')
+      .attr('id', 'start-arrow')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 4)
+      .attr('markerWidth', 3)
+      .attr('markerHeight', 3)
+      .attr('orient', 'auto')
+    .append('svg:path')
+      .attr('d', 'M10,-5L0,0L10,5')
+      .attr('fill', '#777');
+
+
+  this.svg.append('svg:defs').append('svg:marker')
+      .attr('id', 'end-arrow-selected')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 6)
+      .attr('markerWidth', 3)
+      .attr('markerHeight', 3)
+      .attr('orient', 'auto')
+    .append('svg:path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#393');
+
+  this.svg.append('svg:defs').append('svg:marker')
+      .attr('id', 'start-arrow-selected')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 4)
+      .attr('markerWidth', 3)
+      .attr('markerHeight', 3)
+      .attr('orient', 'auto')
+    .append('svg:path')
+      .attr('d', 'M10,-5L0,0L10,5')
+      .attr('fill', '#393');
+
+
+  this.pathType = new PathType(PathType.LINE);
+  this.dragLineDrawer = new DraglineDrawer(this.svg, this.pathType);
+  this.pathDrawer = new PathDrawer(this.svg, this.graph, this.pathType);
+  this.circleDrawer = new CircleDrawer(this.svg, this.graph, this.dragLineDrawer);
+
+
+  this.force = d3.layout.force()
+    .nodes(this.graph.nodes)
+    .links(this.graph.links)
+    .size([width, height])
+    .linkDistance(150)
+    .charge(-500);
+
   this.force.on('tick', function () {
     _self.pathDrawer.update();
     _self.circleDrawer.update();
@@ -336,15 +343,13 @@ var GraphViewer = function(width, height, graph) {
           tx = d3.mouse(this)[0],
           ty = d3.mouse(this)[1];
 
-      _self.pathDrawer.updateDragLine(sx, sy, tx, ty, {right: true, left: false});
-
-      //_self.restart();
+      _self.dragLineDrawer.updateDragLine(sx, sy, tx, ty, {right: true, left: false});
     }
   }
 
   function mouseup() {
     if(_self.graph.mousedown_node) {
-      _self.pathDrawer.hideDragLine();
+      _self.dragLineDrawer.hideDragLine();
 
       if (d3.event.ctrlKey) {
         var point = d3.mouse(this);
@@ -381,7 +386,6 @@ var GraphViewer = function(width, height, graph) {
       case 8: // backspace
       case 46: // delete
         _self.graph.removeSelectedItem();
-        //_self.restart();
         break;
       case 66: // B
         if(_self.graph.selected_link) {
@@ -416,7 +420,7 @@ var GraphViewer = function(width, height, graph) {
     // ctrl
     if(d3.event.keyCode === 17) {
       _self.circleDrawer.enableDrag(_self.force);
-      _self.pathDrawer.hideDragLine();
+      _self.dragLineDrawer.hideDragLine();
       _self.svg.classed('ctrl', false);
     }
   }
@@ -429,7 +433,6 @@ var GraphViewer = function(width, height, graph) {
     .on('keydown', keydown)
     .on('keyup', keyup);
 
-  //_self.svg.call(d3.behavior.zoom().on("zoom", _self.restart)) ;
   this.restart();
 };
 
@@ -470,7 +473,7 @@ d3.select('#importInput').on('change', function() {
 });
 d3.select('#importButton').on('click', function() {
   //d3.select('#importInput')[0].click();
-  document.getElementById("importInput").click();
+  $("#importInput").click();
 });
 d3.select('#exportButton').on('click', function() {
   var json = graph.toJSON();
@@ -478,28 +481,78 @@ d3.select('#exportButton').on('click', function() {
   saveAs(blob, 'export.json');
 });
 d3.select('#changeLinkType').on('click', function () {
-  if (graphViewer.pathDrawer.pathType === PathDrawer.pathTypes.LINE) {
-    graphViewer.pathDrawer.pathType = PathDrawer.pathTypes.CURVE;
+  if (graphViewer.pathType.type === PathType.LINE) {
+    graphViewer.pathType.type = PathType.CURVE;
     this.textContent = 'Directed links';
   }
   else {
-    graphViewer.pathDrawer.pathType = PathDrawer.pathTypes.LINE;
+    graphViewer.pathType.type = PathType.LINE;
     this.textContent = 'Curved links';
   }
   graphViewer.restart();
 });
 
-graph.onChange(function() {
+d3.select('#toggleLinkLabels').on('click', function () {
+  if (graphViewer.config.showLinkLabels) {
+    graphViewer.config.showLinkLabels = false;
+    this.textContent = 'Show link labels';
+  }
+  else {
+    graphViewer.config.showLinkLabels = true;
+    this.textContent = 'Hide link labels';
+  }
+  graphViewer.restart();
+});
+
+d3.select('#toggleNodeLabels').on('click', function () {
+  if (graphViewer.config.showNodeLabels) {
+    graphViewer.config.showNodeLabels = false;
+    this.textContent = 'Show node labels';
+  }
+  else {
+    graphViewer.config.showNodeLabels = true;
+    this.textContent = 'Hide node labels';
+  }
+  graphViewer.restart();
+});
+
+$('#changeId').on('click', function () {
+
+  var newId = prompt("Enter label");
+  if (newId) {
+      if (graph.selected_node) {
+        graph.selected_node.label = newId;
+      }
+      if (graph.selected_link) {
+        graph.selected_link.label = newId;
+      }
+  }
+
+  graphViewer.restart();
+  updateInfo();
+});
+
+function updateInfo() {
 
   var value  = '';
+  $('#selectedItem').text(value);
 
   if (graph.selected_node) {
-    value = 'Node: ' + graph.selected_node.id;
+    value = 'Selected node: ' + graph.selected_node.id;
+    $('#changeId').show();
+    $('#selectedItem').text(value);
+    return;
   }
   if (graph.selected_link) {
-    value = 'Link: ' + graph.selected_link.id;
+    value = 'Selected link: ' + graph.selected_link.id;
+    $('#changeId').show();
+    $('#selectedItem').text(value);
+    return;
   }
+  $('#changeId').hide();
+}
 
-  document.getElementById('selectedItem').textContent = value;
-});
+$('#changeId').hide();
+
+graph.onChange(updateInfo);
 

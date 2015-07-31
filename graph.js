@@ -12,6 +12,7 @@ var Graph = function() {
   this.mousedown_node = null;
   this.nodeFactory = new NodeFactory(this.nodes);
   this.linkFactory = new LinkFactory(this.links);
+  this.config = {};
 
   this.notifyChange = function() {
     //console.warn('Subsribe to onChange event to be notified of changes in the graph');
